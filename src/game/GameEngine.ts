@@ -32,7 +32,7 @@ const INITIAL_SPEED = 14;
 const MAX_SPEED = 32;
 const GRAVITY = -38;
 const JUMP_VELOCITY = 14.5;
-const SLIDE_DURATION = 0.75; // seconds
+const SLIDE_DURATION = 0.75;
 const SEGMENT_LENGTH = 40;
 const VISIBLE_SEGMENTS = 7;
 
@@ -40,14 +40,12 @@ export class GameEngine {
   private container: HTMLElement;
   private callbacks: GameEngineCallbacks;
 
-  // Three.js Core
   private scene!: THREE.Scene;
   private camera!: THREE.PerspectiveCamera;
   private renderer!: THREE.WebGLRenderer;
   private animationFrameId: number | null = null;
   private clock = new THREE.Clock();
 
-  // Player State
   private playerGroup!: THREE.Group;
   private playerMesh!: THREE.Group;
   private shieldMesh!: THREE.Mesh;
@@ -62,7 +60,6 @@ export class GameEngine {
   private slideTimer = 0;
   private speed = INITIAL_SPEED;
 
-  // Run Stats
   private isRunning = false;
   private isPaused = false;
   private score = 0;
@@ -75,10 +72,8 @@ export class GameEngine {
   private powerUpsCollectedCount = 0;
   private runStartTime = 0;
 
-  // Active Power-ups map
   private activePowerUps = new Map<PowerUpType, { remaining: number; total: number }>();
 
-  // Upgrade bonuses (duration in seconds)
   private upgradeBonus = {
     magnet: 0,
     shield: 0,
@@ -87,18 +82,15 @@ export class GameEngine {
     scoreMultiplier: 0,
   };
 
-  // Cosmetic Settings
   private characterColor = '#06b6d4';
   private trailColor = '#06b6d4';
   private cameraShakeEnabled = true;
   private motionEffectsEnabled = true;
   private hapticsEnabled = true;
 
-  // Camera Effects
   private cameraShakeIntensity = 0;
   private baseFOV = 65;
 
-  // Object Pools
   private trackSegments: THREE.Group[] = [];
   private nextSegmentZ = 0;
   private activeObstacles: Array<{
@@ -131,19 +123,15 @@ export class GameEngine {
     collected: boolean;
   }> = [];
 
-  // Environment
   private buildings: THREE.InstancedMesh | null = null;
   private weatherParticles: THREE.Points | null = null;
-  private themeColor = new THREE.Color(0x0a0a23);
 
-  // Character limb references for animation
   private leftLeg: THREE.Mesh | null = null;
   private rightLeg: THREE.Mesh | null = null;
   private leftArm: THREE.Mesh | null = null;
   private rightArm: THREE.Mesh | null = null;
   private runAnimPhase = 0;
 
-  // Touch Swipe Handling
   private touchStartX = 0;
   private touchStartY = 0;
   private touchStartTime = 0;
@@ -157,12 +145,9 @@ export class GameEngine {
     this.createPlayer();
     this.initTrack();
     this.bindEvents();
-
-    // Start passive render loop for menu backdrop
     this.startLoop();
   }
 
-  // --- INITIALIZATION ---
   private initThree() {
     const width = this.container.clientWidth || window.innerWidth;
     const height = this.container.clientHeight || window.innerHeight;
@@ -171,18 +156,17 @@ export class GameEngine {
     this.scene.background = new THREE.Color(0x050512);
     this.scene.fog = new THREE.FogExp2(0x050512, 0.014);
 
-    this.camera = new THREE.PerspectiveCamera(this.baseFOV, width / height, 0.1, 300);
+    this.camera = new THREE.PerspectiveCamera(this.baseFOV, width / Math.max(height, 1), 0.1, 300);
     this.camera.position.set(0, 3.2, 5.5);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
     this.renderer.setSize(width, height);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.25;
 
     this.container.appendChild(this.renderer.domElement);
 
-    // Dynamic Lighting
     const ambientLight = new THREE.AmbientLight(0x222244, 1.8);
     this.scene.add(ambientLight);
 
@@ -196,7 +180,6 @@ export class GameEngine {
   }
 
   private createEnvironment() {
-    // Cyberpunk Horizon Skyscraper Silhouette (Instanced for high FPS)
     const buildingCount = 80;
     const boxGeo = new THREE.BoxGeometry(1, 1, 1);
     const boxMat = new THREE.MeshStandardMaterial({
@@ -206,13 +189,12 @@ export class GameEngine {
     });
 
     this.buildings = new THREE.InstancedMesh(boxGeo, boxMat, buildingCount);
-    const matrix = new THREE.Matrix4();
     const dummy = new THREE.Object3D();
 
     for (let i = 0; i < buildingCount; i++) {
       const isLeft = i % 2 === 0;
       const x = (isLeft ? -1 : 1) * (18 + Math.random() * 35);
-      const z = (Math.random() * 260) - 40;
+      const z = Math.random() * 260 - 40;
       const height = 15 + Math.random() * 45;
       const width = 8 + Math.random() * 12;
       const depth = 8 + Math.random() * 12;
@@ -225,7 +207,6 @@ export class GameEngine {
     this.buildings.instanceMatrix.needsUpdate = true;
     this.scene.add(this.buildings);
 
-    // Floating Cyber Dust & Digital Rain Particles
     const particleCount = 280;
     const particleGeo = new THREE.BufferGeometry();
     const positions = new Float32Array(particleCount * 3);
@@ -249,12 +230,10 @@ export class GameEngine {
     this.scene.add(this.weatherParticles);
   }
 
-  // --- PLAYER MODEL CREATION ---
   private createPlayer() {
     this.playerGroup = new THREE.Group();
     this.playerMesh = new THREE.Group();
 
-    // Torso / Jetpack Cyber Armor
     const bodyMat = new THREE.MeshStandardMaterial({
       color: new THREE.Color(this.characterColor),
       metalness: 0.9,
@@ -271,20 +250,17 @@ export class GameEngine {
       color: new THREE.Color(this.characterColor),
     });
 
-    // Chest Core
     const chestGeo = new THREE.BoxGeometry(0.65, 0.75, 0.45);
     const chest = new THREE.Mesh(chestGeo, bodyMat);
     chest.position.y = 0.95;
     this.playerMesh.add(chest);
 
-    // Glowing Neon Cyber Core Arc Reactor
     const coreGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.08, 16);
     const core = new THREE.Mesh(coreGeo, glowMat);
     core.rotation.x = Math.PI / 2;
     core.position.set(0, 0.98, 0.24);
     this.playerMesh.add(core);
 
-    // Cyber Visor / Helmet
     const headGeo = new THREE.BoxGeometry(0.42, 0.45, 0.45);
     const head = new THREE.Mesh(headGeo, darkMat);
     head.position.y = 1.55;
@@ -295,7 +271,6 @@ export class GameEngine {
     visor.position.set(0, 1.55, 0.22);
     this.playerMesh.add(visor);
 
-    // Limbs with articulation joints for run cycle
     const limbGeo = new THREE.BoxGeometry(0.2, 0.65, 0.22);
 
     this.leftLeg = new THREE.Mesh(limbGeo, darkMat);
@@ -316,7 +291,6 @@ export class GameEngine {
     this.rightArm.position.set(0.46, 0.95, 0);
     this.playerMesh.add(this.rightArm);
 
-    // Energy Hover Trail Thrusters on boots
     const thrusterGeo = new THREE.CylinderGeometry(0.06, 0.02, 0.15, 8);
     const thrusterL = new THREE.Mesh(thrusterGeo, glowMat);
     thrusterL.position.set(-0.22, 0.05, -0.05);
@@ -326,7 +300,6 @@ export class GameEngine {
     thrusterR.position.set(0.22, 0.05, -0.05);
     this.playerMesh.add(thrusterR);
 
-    // Shield Dome Forcefield (invisible until active)
     const shieldGeo = new THREE.SphereGeometry(1.2, 24, 24);
     const shieldMat = new THREE.MeshBasicMaterial({
       color: 0x00f0ff,
@@ -343,7 +316,6 @@ export class GameEngine {
     this.scene.add(this.playerGroup);
   }
 
-  // --- PROCEDURAL TRACK CREATION & POOLING ---
   private initTrack() {
     this.nextSegmentZ = 0;
     for (let i = 0; i < VISIBLE_SEGMENTS; i++) {
@@ -353,8 +325,6 @@ export class GameEngine {
 
   private createTrackSegmentMesh(): THREE.Group {
     const group = new THREE.Group();
-
-    // Road Surface
     const roadWidth = LANE_WIDTH * 3 + 1.2;
     const roadGeo = new THREE.PlaneGeometry(roadWidth, SEGMENT_LENGTH);
     const roadMat = new THREE.MeshStandardMaterial({
@@ -367,7 +337,6 @@ export class GameEngine {
     road.position.y = 0;
     group.add(road);
 
-    // Glowing Neon Lane Dividers
     const dividerGeo = new THREE.PlaneGeometry(0.08, SEGMENT_LENGTH);
     const dividerMat = new THREE.MeshBasicMaterial({
       color: 0x00f0ff,
@@ -385,7 +354,6 @@ export class GameEngine {
     dividerR.position.set(LANE_WIDTH / 2, 0.01, 0);
     group.add(dividerR);
 
-    // Glowing Outer Shoulders (Neon Curbs)
     const curbGeo = new THREE.BoxGeometry(0.25, 0.25, SEGMENT_LENGTH);
     const curbMat = new THREE.MeshBasicMaterial({ color: 0xff007f });
 
@@ -397,7 +365,6 @@ export class GameEngine {
     curbR.position.set(roadWidth / 2, 0.12, 0);
     group.add(curbR);
 
-    // Cyber Neon Arch every 2 segments
     if (Math.random() > 0.4) {
       const archGroup = new THREE.Group();
       const archMat = new THREE.MeshBasicMaterial({ color: 0x8b5cf6 });
@@ -431,7 +398,6 @@ export class GameEngine {
 
     segment.position.set(0, 0, this.nextSegmentZ - SEGMENT_LENGTH / 2);
 
-    // If game is active, procedurally spawn fair obstacles & collectibles on this segment
     if (this.isRunning && this.nextSegmentZ < -25) {
       this.populateSegment(this.nextSegmentZ);
     }
@@ -439,11 +405,8 @@ export class GameEngine {
     this.nextSegmentZ -= SEGMENT_LENGTH;
   }
 
-  // --- PROCEDURAL GENERATION (FAIR LANE ASSIGNMENTS) ---
   private populateSegment(segmentZ: number) {
     const laneOptions: Lane[] = [-1, 0, 1];
-
-    // Difficulty curve based on distance
     const distKm = this.distance / 1000;
     const obstacleCount = distKm > 2 ? 3 : distKm > 0.8 ? 2 : 1;
 
@@ -451,40 +414,33 @@ export class GameEngine {
       const zOffset = -10 - i * 14;
       const obstacleZ = segmentZ + zOffset;
 
-      // Select obstacle type
       const rand = Math.random();
       let type: ObstacleType = 'BARRIER';
-      if (rand < 0.28) type = 'LOW_BARRIER'; // Jump
-      else if (rand < 0.52) type = 'HIGH_BARRIER'; // Slide
-      else if (rand < 0.72) type = 'BARRIER'; // Dodge
-      else if (rand < 0.84) type = 'MOVING_OBSTACLE'; // Sway
-      else if (rand < 0.93) type = 'LASER_GATE'; // Pulsing
+      if (rand < 0.28) type = 'LOW_BARRIER';
+      else if (rand < 0.52) type = 'HIGH_BARRIER';
+      else if (rand < 0.72) type = 'BARRIER';
+      else if (rand < 0.84) type = 'MOVING_OBSTACLE';
+      else if (rand < 0.93) type = 'LASER_GATE';
       else type = 'ROTATING_OBSTACLE';
 
-      // Fair guarantee: randomly pick 1 or 2 lanes to block, leaving at least 1 lane completely free
       const blockedLanes: Lane[] = [];
       const shuffledLanes = [...laneOptions].sort(() => Math.random() - 0.5);
 
+      blockedLanes.push(shuffledLanes[0]);
       if (type === 'HIGH_BARRIER' || type === 'LOW_BARRIER') {
-        // Can block 1 or 2 lanes (or full lane span with vertical evasion)
-        blockedLanes.push(shuffledLanes[0]);
         if (Math.random() > 0.5 && distKm > 0.5) blockedLanes.push(shuffledLanes[1]);
-      } else {
-        // Lateral obstacles: block at most 2 lanes, never all 3
-        blockedLanes.push(shuffledLanes[0]);
-        if (Math.random() > 0.65 && distKm > 1) blockedLanes.push(shuffledLanes[1]);
+      } else if (Math.random() > 0.65 && distKm > 1) {
+        blockedLanes.push(shuffledLanes[1]);
       }
 
       for (const lane of blockedLanes) {
         this.spawnObstacle(type, lane, obstacleZ);
       }
 
-      // Coins in the open lane or above low barrier
       const openLane = laneOptions.find((l) => !blockedLanes.includes(l)) ?? 0;
       this.spawnCoinPattern(openLane, obstacleZ + 4, type === 'LOW_BARRIER');
     }
 
-    // Power-up chance on segment
     if (Math.random() < 0.35) {
       const powerTypes: PowerUpType[] = ['SHIELD', 'MAGNET', 'DOUBLE_COINS', 'SPEED_BOOST', 'SCORE_MULTIPLIER'];
       const chosen = powerTypes[Math.floor(Math.random() * powerTypes.length)];
@@ -493,7 +449,6 @@ export class GameEngine {
     }
   }
 
-  // --- OBSTACLE FACTORY ---
   private spawnObstacle(type: ObstacleType, lane: Lane, z: number) {
     const group = new THREE.Group();
     const x = lane * LANE_WIDTH;
@@ -503,7 +458,6 @@ export class GameEngine {
     let rotationSpeed = 0;
 
     if (type === 'BARRIER') {
-      // Tall barrier (must lane change)
       const geo = new THREE.BoxGeometry(LANE_WIDTH * 0.88, 2.4, 0.4);
       const mat = new THREE.MeshStandardMaterial({
         color: 0xff0055,
@@ -515,14 +469,11 @@ export class GameEngine {
       mesh.position.y = 1.2;
       group.add(mesh);
 
-      // Neon warning stripes
       const stripeMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
       const stripe = new THREE.Mesh(new THREE.BoxGeometry(LANE_WIDTH * 0.9, 0.15, 0.42), stripeMat);
       stripe.position.y = 2.0;
       group.add(stripe);
-
     } else if (type === 'LOW_BARRIER') {
-      // Low neon hurdle (must JUMP)
       const geo = new THREE.BoxGeometry(LANE_WIDTH * 0.92, 0.65, 0.4);
       const mat = new THREE.MeshStandardMaterial({
         color: 0x00f0ff,
@@ -533,14 +484,11 @@ export class GameEngine {
       mesh.position.y = 0.33;
       group.add(mesh);
 
-      // Warning Jump Arrow Hologram
       const arrowMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true });
       const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.5, 4), arrowMat);
       arrow.position.set(0, 1.1, 0);
       group.add(arrow);
-
     } else if (type === 'HIGH_BARRIER') {
-      // High laser girder (must SLIDE)
       const geo = new THREE.BoxGeometry(LANE_WIDTH * 0.95, 1.4, 0.4);
       const mat = new THREE.MeshStandardMaterial({
         color: 0xff9900,
@@ -548,17 +496,14 @@ export class GameEngine {
         emissiveIntensity: 0.7,
       });
       const mesh = new THREE.Mesh(geo, mat);
-      mesh.position.y = 1.9; // Leaves clearance under 1.2 for sliding
+      mesh.position.y = 1.9;
       group.add(mesh);
 
-      // Danger electric fringe
       const fringeMat = new THREE.MeshBasicMaterial({ color: 0xff3300 });
       const fringe = new THREE.Mesh(new THREE.BoxGeometry(LANE_WIDTH * 0.96, 0.08, 0.42), fringeMat);
       fringe.position.y = 1.18;
       group.add(fringe);
-
     } else if (type === 'MOVING_OBSTACLE') {
-      // Hover drone swaying horizontally
       const geo = new THREE.BoxGeometry(1.2, 1.5, 0.8);
       const mat = new THREE.MeshStandardMaterial({
         color: 0xaa00ff,
@@ -571,9 +516,7 @@ export class GameEngine {
 
       moveDirection = 1;
       moveRange = LANE_WIDTH * 0.85;
-
     } else if (type === 'LASER_GATE') {
-      // Vertical pulsating laser gate
       const frameGeo = new THREE.BoxGeometry(0.18, 3.2, 0.2);
       const frameMat = new THREE.MeshBasicMaterial({ color: 0x333366 });
       const leftPillar = new THREE.Mesh(frameGeo, frameMat);
@@ -590,9 +533,7 @@ export class GameEngine {
       const beam = new THREE.Mesh(new THREE.BoxGeometry(LANE_WIDTH * 0.9, 2.8, 0.08), beamMat);
       beam.position.y = 1.6;
       group.add(beam);
-
     } else {
-      // Rotating laser blades
       const hubGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.3, 8);
       const hubMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
       const hub = new THREE.Mesh(hubGeo, hubMat);
@@ -600,13 +541,15 @@ export class GameEngine {
       hub.rotation.x = Math.PI / 2;
       group.add(hub);
 
-      const bladeGeo = new THREE.BoxGeometry(2.2, 0.2, 0.1);
-      const bladeMat = new THREE.MeshBasicMaterial({ color: 0xff00aa });
-      const blade = new THREE.Mesh(bladeGeo, bladeMat);
-      blade.position.y = 1.4;
-      group.add(blade);
-
-      rotationSpeed = 2.5;
+      const bladeGeo = new THREE.BoxGeometry(2.2, 0.15, 0.2);
+      const bladeMat = new THREE.MeshBasicMaterial({ color: 0xff0055 });
+      const bladeA = new THREE.Mesh(bladeGeo, bladeMat);
+      const bladeB = bladeA.clone();
+      bladeB.rotation.y = Math.PI / 2;
+      bladeA.position.y = 1.4;
+      bladeB.position.y = 1.4;
+      group.add(bladeA, bladeB);
+      rotationSpeed = 3.5;
     }
 
     group.position.set(x, 0, z);
@@ -626,7 +569,6 @@ export class GameEngine {
     });
   }
 
-  // --- COINS FACTORY ---
   private spawnCoinPattern(lane: Lane, startZ: number, isHigh = false) {
     const coinGeo = new THREE.CylinderGeometry(0.28, 0.28, 0.08, 16);
     const coinMat = new THREE.MeshStandardMaterial({
@@ -648,24 +590,16 @@ export class GameEngine {
       mesh.position.set(x, y, z);
       this.scene.add(mesh);
 
-      this.activeCoins.push({
-        mesh,
-        lane,
-        z,
-        y,
-        collected: false,
-      });
+      this.activeCoins.push({ mesh, lane, z, y, collected: false });
     }
   }
 
-  // --- POWER-UP FACTORY ---
   private spawnPowerUp(type: PowerUpType, lane: Lane, z: number) {
     const group = new THREE.Group();
     const x = lane * LANE_WIDTH;
 
     let color = 0x00f0ff;
-    if (type === 'SHIELD') color = 0x00f0ff;
-    else if (type === 'MAGNET') color = 0xff0055;
+    if (type === 'MAGNET') color = 0xff0055;
     else if (type === 'DOUBLE_COINS') color = 0xffd700;
     else if (type === 'SPEED_BOOST') color = 0x00ff66;
     else if (type === 'SCORE_MULTIPLIER') color = 0xa855f7;
@@ -675,13 +609,11 @@ export class GameEngine {
       color,
       emissive: color,
       emissiveIntensity: 0.9,
-      wireframe: false,
     });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.y = 0.8;
     group.add(mesh);
 
-    // Orbiting halo ring
     const ringGeo = new THREE.TorusGeometry(0.65, 0.04, 8, 24);
     const ringMat = new THREE.MeshBasicMaterial({ color, wireframe: true });
     const ring = new THREE.Mesh(ringGeo, ringMat);
@@ -692,17 +624,9 @@ export class GameEngine {
     group.position.set(x, 0, z);
     this.scene.add(group);
 
-    this.activePowerUpItems.push({
-      mesh: group,
-      type,
-      lane,
-      z,
-      y: 0.8,
-      collected: false,
-    });
+    this.activePowerUpItems.push({ mesh: group, type, lane, z, y: 0.8, collected: false });
   }
 
-  // --- CONTROLS & EVENT LISTENERS ---
   private bindEvents() {
     window.addEventListener('resize', this.onResize);
     window.addEventListener('keydown', this.onKeyDown);
@@ -726,31 +650,38 @@ export class GameEngine {
 
     if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
     }
     sound.stopMusic();
+
+    this.renderer.dispose();
+    this.scene.traverse((object) => {
+      const mesh = object as THREE.Mesh;
+      if (mesh.geometry) mesh.geometry.dispose();
+      if (mesh.material) {
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        materials.forEach((material) => material.dispose());
+      }
+    });
   }
 
   private onResize = () => {
     if (!this.container) return;
     const width = this.container.clientWidth || window.innerWidth;
     const height = this.container.clientHeight || window.innerHeight;
-    this.camera.aspect = width / height;
+    this.camera.aspect = width / Math.max(height, 1);
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   };
 
   private onKeyDown = (e: KeyboardEvent) => {
     if (!this.isRunning || this.isPaused) return;
 
-    if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
-      this.moveLeft();
-    } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
-      this.moveRight();
-    } else if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W' || e.key === ' ') {
-      this.jump();
-    } else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
-      this.slide();
-    }
+    if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') this.moveLeft();
+    else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') this.moveRight();
+    else if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W' || e.key === ' ') this.jump();
+    else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') this.slide();
   };
 
   private onTouchStart = (e: TouchEvent) => {
@@ -784,11 +715,9 @@ export class GameEngine {
   };
 
   private handleSwipe(dx: number, dy: number, dt: number) {
-    if (!this.isRunning || this.isPaused) return;
+    if (!this.isRunning || this.isPaused || dt > 600) return;
 
-    const threshold = 35; // minimum swipe distance
-    if (dt > 600) return; // Too slow for swipe
-
+    const threshold = 35;
     if (Math.abs(dx) > Math.abs(dy)) {
       if (dx < -threshold) this.moveLeft();
       else if (dx > threshold) this.moveRight();
@@ -798,24 +727,28 @@ export class GameEngine {
     }
   }
 
-  // --- ACTIONS ---
   public moveLeft() {
+    if (!this.isRunning || this.isPaused) return;
     if (this.targetLane > -1) {
       this.targetLane = (this.targetLane - 1) as Lane;
+      this.currentLane = this.targetLane;
       sound.playLaneChange();
       triggerHaptic('light', this.hapticsEnabled);
     }
   }
 
   public moveRight() {
+    if (!this.isRunning || this.isPaused) return;
     if (this.targetLane < 1) {
       this.targetLane = (this.targetLane + 1) as Lane;
+      this.currentLane = this.targetLane;
       sound.playLaneChange();
       triggerHaptic('light', this.hapticsEnabled);
     }
   }
 
   public jump() {
+    if (!this.isRunning || this.isPaused) return;
     if (this.isGrounded && !this.isSliding) {
       this.verticalVelocity = JUMP_VELOCITY;
       this.isGrounded = false;
@@ -825,19 +758,16 @@ export class GameEngine {
   }
 
   public slide() {
+    if (!this.isRunning || this.isPaused) return;
     if (!this.isSliding) {
       this.isSliding = true;
       this.slideTimer = SLIDE_DURATION;
-      // Fast drop if jumping
-      if (!this.isGrounded) {
-        this.verticalVelocity = -22;
-      }
+      if (!this.isGrounded) this.verticalVelocity = -22;
       sound.playSlide();
       triggerHaptic('light', this.hapticsEnabled);
     }
   }
 
-  // --- GAMEPLAY LIFECYCLE ---
   public startRun(options: {
     characterColor: string;
     trailColor: string;
@@ -859,7 +789,6 @@ export class GameEngine {
     this.motionEffectsEnabled = options.motionEffects;
     this.hapticsEnabled = options.haptics;
 
-    // Reset Player
     this.playerX = 0;
     this.playerY = 0;
     this.playerZ = 0;
@@ -870,8 +799,9 @@ export class GameEngine {
     this.isSliding = false;
     this.slideTimer = 0;
     this.speed = INITIAL_SPEED;
+    this.runAnimPhase = 0;
+    this.cameraShakeIntensity = 0;
 
-    // Reset Run Stats
     this.score = 0;
     this.coins = 0;
     this.distance = 0;
@@ -883,58 +813,65 @@ export class GameEngine {
     this.runStartTime = Date.now();
     this.activePowerUps.clear();
 
-    // Clear old spawned entities
     this.clearSpawnedObjects();
 
-    // Realign Track
     this.nextSegmentZ = 0;
     for (let i = 0; i < this.trackSegments.length; i++) {
-      this.trackSegments[i].position.z = -i * SEGMENT_LENGTH;
+      this.trackSegments[i].position.set(0, 0, -i * SEGMENT_LENGTH - SEGMENT_LENGTH / 2);
+      this.populateSegment(-i * SEGMENT_LENGTH);
     }
     this.nextSegmentZ = -this.trackSegments.length * SEGMENT_LENGTH;
 
     this.isRunning = true;
     this.isPaused = false;
 
-    // Apply color to player mesh
     this.applyCosmetics();
-
     sound.startMusic(1.0);
   }
 
   private applyCosmetics() {
     this.playerMesh.traverse((child) => {
       if (child instanceof THREE.Mesh && child.material) {
-        if ((child.material as THREE.MeshStandardMaterial).emissive) {
-          (child.material as THREE.MeshStandardMaterial).color.set(this.characterColor);
+        const materials = Array.isArray(child.material) ? child.material : [child.material];
+        for (const material of materials) {
+          const standard = material as THREE.MeshStandardMaterial;
+          if (standard.color && standard.emissive) {
+            standard.color.set(this.characterColor);
+            standard.emissive.set(this.characterColor);
+          }
         }
+      }
+    });
+
+    this.playerMesh.traverse((child) => {
+      if (!(child instanceof THREE.Mesh) || !child.material) return;
+      const materials = Array.isArray(child.material) ? child.material : [child.material];
+      for (const material of materials) {
+        const basic = material as THREE.MeshBasicMaterial;
+        if (basic.color) basic.color.set(this.characterColor);
       }
     });
   }
 
   private clearSpawnedObjects() {
-    for (const obs of this.activeObstacles) {
-      this.scene.remove(obs.mesh);
-    }
+    for (const obs of this.activeObstacles) this.scene.remove(obs.mesh);
     this.activeObstacles = [];
 
-    for (const c of this.activeCoins) {
-      this.scene.remove(c.mesh);
-    }
+    for (const c of this.activeCoins) this.scene.remove(c.mesh);
     this.activeCoins = [];
 
-    for (const p of this.activePowerUpItems) {
-      this.scene.remove(p.mesh);
-    }
+    for (const p of this.activePowerUpItems) this.scene.remove(p.mesh);
     this.activePowerUpItems = [];
   }
 
   public pause() {
+    if (!this.isRunning) return;
     this.isPaused = true;
     sound.stopMusic();
   }
 
   public resume() {
+    if (!this.isRunning) return;
     this.isPaused = false;
     sound.startMusic(this.speed / INITIAL_SPEED);
   }
@@ -942,10 +879,11 @@ export class GameEngine {
   public stop() {
     this.isRunning = false;
     this.isPaused = false;
+    this.activePowerUps.clear();
+    this.clearSpawnedObjects();
     sound.stopMusic();
   }
 
-  // --- MAIN ENGINE LOOP ---
   private startLoop() {
     const animate = () => {
       this.animationFrameId = requestAnimationFrame(animate);
@@ -958,37 +896,29 @@ export class GameEngine {
   }
 
   private update(delta: number) {
-    // Passive background rotation in menu
     if (!this.isRunning) {
-      if (this.playerGroup) {
-        this.playerGroup.rotation.y += delta * 0.8;
-      }
+      if (this.playerGroup) this.playerGroup.rotation.y += delta * 0.8;
       return;
     }
 
     if (this.isPaused) return;
 
-    // 1. SPEED & DIFFICULTY SCALING
     const isSpeedBoosted = this.activePowerUps.has('SPEED_BOOST');
     const targetSpeed = isSpeedBoosted
       ? MAX_SPEED * 1.35
-      : Math.min(INITIAL_SPEED + (this.distance / 120), MAX_SPEED);
+      : Math.min(INITIAL_SPEED + this.distance / 120, MAX_SPEED);
     this.speed = THREE.MathUtils.lerp(this.speed, targetSpeed, delta * 3);
 
-    // 2. FORWARD MOVEMENT
     const moveZ = this.speed * delta;
     this.playerZ -= moveZ;
     this.distance += moveZ;
 
-    // Score accumulation
     const scoreRate = 10 * (this.activePowerUps.has('SCORE_MULTIPLIER') ? 2 : 1);
-    this.score += Math.floor(moveZ * scoreRate * (this.combo > 1 ? 1 + (this.combo * 0.2) : 1));
+    this.score += Math.floor(moveZ * scoreRate * (this.combo > 1 ? 1 + this.combo * 0.2 : 1));
 
-    // 3. SMOOTH LANE TRANSITION
     const targetX = this.targetLane * LANE_WIDTH;
     this.playerX = THREE.MathUtils.lerp(this.playerX, targetX, delta * 14);
 
-    // 4. JUMP & GRAVITY PHYSICS
     if (!this.isGrounded) {
       this.verticalVelocity += GRAVITY * delta;
       this.playerY += this.verticalVelocity * delta;
@@ -1000,75 +930,46 @@ export class GameEngine {
       }
     }
 
-    // 5. SLIDE TIMER & STANCE
     if (this.isSliding) {
       this.slideTimer -= delta;
-      if (this.slideTimer <= 0) {
-        this.isSliding = false;
-      }
+      if (this.slideTimer <= 0) this.isSliding = false;
     }
 
-    // 6. ANIMATE CHARACTER RUN / SLIDE / JUMP LIMBS
     this.animatePlayer(delta);
-
-    // Apply transformed position to player
     this.playerGroup.position.set(this.playerX, this.playerY, this.playerZ);
     this.playerGroup.rotation.y = 0;
-    // Bank/tilt into lane changes for responsive feel
     const tilt = (targetX - this.playerX) * 0.15;
     this.playerGroup.rotation.z = -tilt;
 
-    // 7. POWER-UPS TICKING
     const powerUpsList: ActivePowerUpState[] = [];
     for (const [type, data] of this.activePowerUps.entries()) {
       data.remaining -= delta;
-      if (data.remaining <= 0) {
-        this.activePowerUps.delete(type);
-      } else {
-        powerUpsList.push({
-          type,
-          remainingTime: Math.max(0, data.remaining),
-          totalDuration: data.total,
-        });
+      if (data.remaining <= 0) this.activePowerUps.delete(type);
+      else {
+        powerUpsList.push({ type, remainingTime: data.remaining, totalDuration: data.total });
       }
     }
 
-    // Shield Forcefield Visual
     const hasShield = this.activePowerUps.has('SHIELD');
     if (this.shieldMesh) {
       const targetOpacity = hasShield ? 0.6 : 0;
-      (this.shieldMesh.material as THREE.MeshBasicMaterial).opacity = THREE.MathUtils.lerp(
-        (this.shieldMesh.material as THREE.MeshBasicMaterial).opacity,
-        targetOpacity,
-        delta * 8
-      );
+      const material = this.shieldMesh.material as THREE.MeshBasicMaterial;
+      material.opacity = THREE.MathUtils.lerp(material.opacity, targetOpacity, delta * 8);
       this.shieldMesh.rotation.y += delta * 2;
       this.shieldMesh.rotation.x += delta * 1.5;
     }
 
-    // 8. COMBO DECAY TIMER
     if (this.combo > 1) {
       this.comboTimer -= delta;
-      if (this.comboTimer <= 0) {
-        this.combo = 1;
-      }
+      if (this.comboTimer <= 0) this.combo = 1;
     }
 
-    // 9. DYNAMIC CAMERA FOLLOW & SHAKE
     this.updateCamera(delta, isSpeedBoosted);
-
-    // 10. PROCEDURAL TRACK RECYCLING
     this.updateTrack();
-
-    // 11. OBSTACLES, COINS & POWERUP INTERACTION / COLLISION
     this.updateEntities(delta);
 
-    // 12. WEATHER / ENVIRONMENT DRIFT
-    if (this.weatherParticles) {
-      this.weatherParticles.position.z = this.playerZ;
-    }
+    if (this.weatherParticles) this.weatherParticles.position.z = this.playerZ;
 
-    // Send Realtime Stats back to React HUD
     this.callbacks.onScoreUpdate({
       score: this.score,
       coins: this.coins,
@@ -1081,7 +982,6 @@ export class GameEngine {
 
   private animatePlayer(delta: number) {
     if (this.isSliding) {
-      // Crouch stance
       this.playerMesh.scale.set(1.1, 0.45, 1.1);
       this.playerMesh.position.y = 0.25;
       this.playerMesh.rotation.x = -0.35;
@@ -1098,7 +998,6 @@ export class GameEngine {
         if (this.leftArm) this.leftArm.rotation.x = -legAngle * 0.9;
         if (this.rightArm) this.rightArm.rotation.x = legAngle * 0.9;
       } else {
-        // Jump pose
         if (this.leftLeg) this.leftLeg.rotation.x = -0.6;
         if (this.rightLeg) this.rightLeg.rotation.x = 0.4;
         if (this.leftArm) this.leftArm.rotation.x = -0.9;
@@ -1109,21 +1008,19 @@ export class GameEngine {
 
   private updateCamera(delta: number, isSpeedBoosted: boolean) {
     const targetZ = this.playerZ + 5.5;
-    const targetY = 3.2 + (this.playerY * 0.35);
+    const targetY = 3.2 + this.playerY * 0.35;
     const targetX = this.playerX * 0.4;
 
     this.camera.position.x = THREE.MathUtils.lerp(this.camera.position.x, targetX, delta * 10);
     this.camera.position.y = THREE.MathUtils.lerp(this.camera.position.y, targetY, delta * 12);
     this.camera.position.z = targetZ;
 
-    // FOV stretch on high speed or speed boost
     const targetFOV = isSpeedBoosted
       ? this.baseFOV + 16
       : this.baseFOV + (this.speed - INITIAL_SPEED) * 0.55;
     this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, targetFOV, delta * 4);
     this.camera.updateProjectionMatrix();
 
-    // Camera Shake
     if (this.cameraShakeIntensity > 0 && this.cameraShakeEnabled) {
       const shakeX = (Math.random() - 0.5) * this.cameraShakeIntensity * 0.3;
       const shakeY = (Math.random() - 0.5) * this.cameraShakeIntensity * 0.3;
@@ -1149,29 +1046,17 @@ export class GameEngine {
     const hasMagnet = this.activePowerUps.has('MAGNET');
     const isInvulnerable = this.activePowerUps.has('SPEED_BOOST');
     const playerRadius = 0.45;
-    const playerHeight = this.isSliding ? 0.6 : 1.7;
 
-    // --- COIN COLLECTION & MAGNET ---
     for (const coin of this.activeCoins) {
       if (coin.collected) continue;
-
-      // Rotation animation
       coin.mesh.rotation.z += delta * 4;
 
-      // Magnet Attraction
       if (hasMagnet) {
-        const distToPlayer = coin.mesh.position.distanceTo(
-          new THREE.Vector3(this.playerX, this.playerY + 0.5, this.playerZ)
-        );
-        if (distToPlayer < 16) {
-          coin.mesh.position.lerp(
-            new THREE.Vector3(this.playerX, this.playerY + 0.6, this.playerZ),
-            delta * 12
-          );
-        }
+        const target = new THREE.Vector3(this.playerX, this.playerY + 0.6, this.playerZ);
+        const distToPlayer = coin.mesh.position.distanceTo(target);
+        if (distToPlayer < 16) coin.mesh.position.lerp(target, Math.min(1, delta * 12));
       }
 
-      // Check Collection
       const dz = Math.abs(coin.mesh.position.z - this.playerZ);
       const dx = Math.abs(coin.mesh.position.x - this.playerX);
       const dy = Math.abs(coin.mesh.position.y - this.playerY);
@@ -1180,41 +1065,32 @@ export class GameEngine {
         coin.collected = true;
         this.scene.remove(coin.mesh);
 
-        // Coin Values & Combos
-        const isDouble = this.activePowerUps.has('DOUBLE_COINS');
-        const coinAmount = isDouble ? 2 : 1;
+        const coinAmount = this.activePowerUps.has('DOUBLE_COINS') ? 2 : 1;
         this.coins += coinAmount;
-
-        // Combo increment
         this.combo = Math.min(this.combo + 1, 10);
         this.maxCombo = Math.max(this.maxCombo, this.combo);
-        this.comboTimer = 3.5; // Reset combo decay
-
+        this.comboTimer = 3.5;
         this.score += 25 * this.combo;
         sound.playCoin(this.combo);
         triggerHaptic('light', this.hapticsEnabled);
       }
 
-      // Clean up behind player
       if (coin.mesh.position.z > this.playerZ + 8) {
         coin.collected = true;
         this.scene.remove(coin.mesh);
       }
     }
 
-    // --- POWER-UP COLLECTION ---
     for (const item of this.activePowerUpItems) {
       if (item.collected) continue;
 
       item.mesh.rotation.y += delta * 3;
-
       const dz = Math.abs(item.mesh.position.z - this.playerZ);
       const dx = Math.abs(item.mesh.position.x - this.playerX);
 
       if (dz < 1.2 && dx < 0.9) {
         item.collected = true;
         this.scene.remove(item.mesh);
-
         this.activatePowerUp(item.type);
         sound.playPowerUp();
         triggerHaptic('medium', this.hapticsEnabled);
@@ -1227,30 +1103,21 @@ export class GameEngine {
       }
     }
 
-    // --- OBSTACLE INTERACTION & NEAR MISS ---
     for (const obs of this.activeObstacles) {
       if (obs.cleared) continue;
 
-      // Handle Moving Obstacle Sway
       if (obs.type === 'MOVING_OBSTACLE' && obs.moveDirection && obs.moveRange) {
         obs.mesh.position.x += obs.moveDirection * delta * 2.2;
         const currentCenter = (obs.initialLane ?? 0) * LANE_WIDTH;
-        if (Math.abs(obs.mesh.position.x - currentCenter) > obs.moveRange) {
-          obs.moveDirection *= -1;
-        }
+        if (Math.abs(obs.mesh.position.x - currentCenter) > obs.moveRange) obs.moveDirection *= -1;
       }
 
-      // Rotating blades
-      if (obs.rotationSpeed) {
-        obs.mesh.rotation.z += obs.rotationSpeed * delta;
-      }
+      if (obs.rotationSpeed) obs.mesh.rotation.z += obs.rotationSpeed * delta;
 
       const dz = obs.mesh.position.z - this.playerZ;
       const dx = Math.abs(obs.mesh.position.x - this.playerX);
 
-      // --- NEAR MISS CHECK (Reward skilled close evasion!) ---
       if (!obs.nearMissChecked && dz > -0.5 && dz < 1.2) {
-        // If passing closely on adjacent lane without crashing
         if (dx > 0.8 && dx < 2.0 && !this.activePowerUps.has('SPEED_BOOST')) {
           obs.nearMissChecked = true;
           this.nearMisses++;
@@ -1259,7 +1126,6 @@ export class GameEngine {
           this.combo = Math.min(this.combo + 1, 10);
           this.maxCombo = Math.max(this.maxCombo, this.combo);
           this.comboTimer = 3.5;
-
           sound.playNearMiss();
           triggerHaptic('light', this.hapticsEnabled);
           this.cameraShakeIntensity = 0.25;
@@ -1267,54 +1133,38 @@ export class GameEngine {
         }
       }
 
-      // --- COLLISION DETECTION ---
       if (Math.abs(dz) < 1.0) {
         let collides = false;
 
         if (obs.type === 'BARRIER' || obs.type === 'MOVING_OBSTACLE' || obs.type === 'ROTATING_OBSTACLE') {
-          // Standard lane barrier: collides if in same lane column
-          if (dx < playerRadius + 0.6) {
-            collides = true;
-          }
+          collides = dx < playerRadius + 0.6;
         } else if (obs.type === 'LOW_BARRIER') {
-          // Must JUMP over: collides if player Y is not high enough
-          if (dx < playerRadius + 0.6 && this.playerY < 0.95) {
-            collides = true;
-          }
+          collides = dx < playerRadius + 0.6 && this.playerY < 0.95;
         } else if (obs.type === 'HIGH_BARRIER') {
-          // Must SLIDE under: collides if player is NOT sliding
-          if (dx < playerRadius + 0.6 && !this.isSliding) {
-            collides = true;
-          }
+          collides = dx < playerRadius + 0.6 && !this.isSliding;
         } else if (obs.type === 'LASER_GATE') {
-          if (dx < playerRadius + 0.6) {
-            collides = true;
-          }
+          collides = dx < playerRadius + 0.6;
         }
 
         if (collides) {
           obs.cleared = true;
           if (isInvulnerable) {
-            // Speed boost smashes through obstacles
             this.scene.remove(obs.mesh);
             sound.playShieldBreak();
             this.cameraShakeIntensity = 0.4;
           } else if (this.activePowerUps.has('SHIELD')) {
-            // Consume Shield
             this.activePowerUps.delete('SHIELD');
             this.scene.remove(obs.mesh);
             sound.playShieldBreak();
             this.cameraShakeIntensity = 0.5;
             triggerHaptic('heavy', this.hapticsEnabled);
           } else {
-            // CRASH -> GAME OVER
             this.handleCrash();
             return;
           }
         }
       }
 
-      // Cleanup passed obstacles
       if (obs.mesh.position.z > this.playerZ + 12) {
         obs.cleared = true;
         this.scene.remove(obs.mesh);
@@ -1330,14 +1180,14 @@ export class GameEngine {
     else if (type === 'SPEED_BOOST') duration = 6 + this.upgradeBonus.speedBoost;
     else if (type === 'SCORE_MULTIPLIER') duration = 10 + this.upgradeBonus.scoreMultiplier;
 
-    this.activePowerUps.set(type, {
-      remaining: duration,
-      total: duration,
-    });
+    this.activePowerUps.set(type, { remaining: duration, total: duration });
   }
 
   private handleCrash() {
+    if (!this.isRunning) return;
     this.isRunning = false;
+    this.isPaused = false;
+    this.activePowerUps.clear();
     sound.stopMusic();
     sound.playHit();
     triggerHaptic('heavy', this.hapticsEnabled);
